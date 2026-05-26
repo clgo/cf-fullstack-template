@@ -1,0 +1,83 @@
+name: Deploy to Cloudflare
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main]
+  # Allow manual trigger from GitHub Actions UI
+  workflow_dispatch:
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── 1. Deploy Worker ────────────────────────────────────────────────────────
+  deploy-worker:
+    name: Deploy Worker
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install Worker dependencies
+        run: npm ci
+        working-directory: worker
+
+      # wrangler.toml is gitignored — generate it from the example template
+      # The only secret it needs is the D1 database ID
+      - name: Create wrangler.toml
+        working-directory: worker
+        run: |
+          sed 's/REPLACE_WITH_YOUR_D1_DATABASE_ID/${{ secrets.D1_DATABASE_ID }}/' \
+            wrangler.toml.example > wrangler.toml
+
+      - name: Deploy Worker
+        run: npm run deploy
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  # ── 2. Deploy Frontend to Pages ─────────────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    # Wait for the Worker to be live before deploying a frontend that calls it
+    needs: deploy-worker
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build Frontend
+        run: npm run build
+        working-directory: frontend
+        env:
+          # Base Worker URL — the /api prefix is appended by client.ts
+          # e.g. https://myapp-api.YOUR_ACCOUNT.workers.dev
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Pin wrangler to avoid breaking changes in major versions
+          wranglerVersion: '3.114.17'
+          # ⚠️  Change 'myapp' to your Cloudflare Pages project name
+          command: pages deploy dist --project-name=myapp
+          workingDirectory: frontend
