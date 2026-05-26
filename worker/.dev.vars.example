@@ -1,0 +1,10 @@
+# ── Local development secrets ─────────────────────────────────────────────────
+# Copy this file to .dev.vars (which is gitignored) and fill in values.
+# These are only used by `wrangler dev`. Production secrets are set via
+# `wrangler secret put <NAME>`.
+
+# Bearer token to protect /api/* routes in local dev
+API_KEY=your-local-dev-api-key-here
+
+# (Optional) OpenAI API key for paid AI chat features
+# OPENAI_API_KEY=sk-...

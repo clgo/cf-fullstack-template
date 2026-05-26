@@ -1,0 +1,51 @@
+# ── Worker identity ──────────────────────────────────────────────────────────
+# ⚠️  Change 'myapp-api' to your Worker name
+name = "myapp-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Workers Unbound: removes the 30 s wall-clock limit (standard plan).
+# Required for long-running tasks (AI inference, large file processing).
+# Requires Cloudflare Workers Paid plan. Remove if you are on the free plan.
+usage_model = "unbound"
+
+# ── D1 Database ───────────────────────────────────────────────────────────────
+[[d1_databases]]
+binding = "DB"
+# ⚠️  Change 'myapp-db' to your database name (from `wrangler d1 create`)
+database_name = "myapp-db"
+# Replaced by CI from D1_DATABASE_ID secret; fill in manually for local dev
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# ── R2 Bucket ─────────────────────────────────────────────────────────────────
+[[r2_buckets]]
+binding = "BUCKET"
+# ⚠️  Change 'myapp-docs' to your bucket name (from `wrangler r2 bucket create`)
+bucket_name = "myapp-docs"
+
+# ── Workers AI ────────────────────────────────────────────────────────────────
+[ai]
+binding = "AI"
+
+# ── Cron Triggers ─────────────────────────────────────────────────────────────
+# Remove or modify these crons for your app.
+# Format: "minute hour day month weekday" (UTC)
+[triggers]
+crons = [
+  # Example: daily job at 00:00 SGT (16:00 UTC)
+  "0 16 * * *",
+  # Example: monthly job on the 1st at 01:00 UTC
+  "0 1 1 * *"
+]
+
+# ── Non-secret vars ───────────────────────────────────────────────────────────
+# Secrets go in .dev.vars (local) or `wrangler secret put` (production)
+[vars]
+ENVIRONMENT = "production"
+# Set to "false" to pause cron jobs without redeploying
+CRON_ENABLED = "true"
+
+# ── Secrets reference (set via `wrangler secret put <NAME>`) ─────────────────
+# API_KEY            — Bearer token protecting /api/* routes
+# OPENAI_API_KEY     — (optional) OpenAI key for paid AI features
