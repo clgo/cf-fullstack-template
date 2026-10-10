@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { authMiddleware } from './middleware/auth';
+import { accessAuth } from './middleware/auth';
 import itemsRoute from './routes/items';
 
 // ── Env bindings ──────────────────────────────────────────────────────────────
@@ -16,8 +15,10 @@ export type Env = {
   // Non-secret vars (wrangler.toml [vars])
   ENVIRONMENT?: string;
   CRON_ENABLED?: string;
+  // Cloudflare Access (wrangler.toml [vars]; see middleware/auth.ts)
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
   // Secrets (set via `wrangler secret put` or .dev.vars)
-  API_KEY?: string;
   OPENAI_API_KEY?: string;
 };
 
@@ -25,15 +26,9 @@ export type Env = {
 const app = new Hono<{ Bindings: Env }>();
 
 // Global middleware
+// No CORS: the frontend calls /api on its own hostname (same origin), so other
+// sites can't call this API from a browser.
 app.use('*', logger());
-app.use(
-  '*',
-  cors({
-    origin: '*',
-    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-  })
-);
 
 // Public health check (no auth)
 app.get('/', (c) =>
@@ -45,16 +40,15 @@ app.get('/', (c) =>
   })
 );
 
-// ── API routes (auth-protected) ────────────────────────────────────────────────
+// ── API routes (protected by Cloudflare Access) ───────────────────────────────
 const api = new Hono<{ Bindings: Env }>();
 
-// Public ping — useful for health checks and client auth verification
+// Every /api/* route requires a valid Cloudflare Access login
+api.use('*', accessAuth);
+
 api.get('/ping', (c) =>
   c.json({ message: 'pong', timestamp: new Date().toISOString() })
 );
-
-// Apply auth to all /api/* routes after /ping
-api.use('*', authMiddleware);
 
 // Example AI endpoint using Workers AI (free)
 api.post('/ai/generate', async (c) => {

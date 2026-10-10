@@ -1,10 +1,11 @@
-# ── Local development secrets ─────────────────────────────────────────────────
+# ── Local development settings ────────────────────────────────────────────────
 # Copy this file to .dev.vars (which is gitignored) and fill in values.
 # These are only used by `wrangler dev`. Production secrets are set via
 # `wrangler secret put <NAME>`.
 
-# Bearer token to protect /api/* routes in local dev
-API_KEY=your-local-dev-api-key-here
+# Skips the Cloudflare Access check for local `wrangler dev` only.
+# Never set this in wrangler.toml or as a production variable.
+ENVIRONMENT=development
 
 # (Optional) OpenAI API key for paid AI chat features
 # OPENAI_API_KEY=sk-...

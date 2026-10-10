@@ -23,11 +23,14 @@
 #   ./create-app.sh my-budget-app
 #   ./create-app.sh my-budget-app "My Budget App"
 #   ./create-app.sh my-budget-app "My Budget App" ~/projects/my-budget-app
+#   APP_DOMAIN=budget.example.com ./create-app.sh my-budget-app
 #
 # What it does:
 #   1. Copies this template (excluding itself) to output-dir
 #   2. Replaces all 'myapp' / 'My App' placeholders with your names
 #   3. Applies Cloudflare naming: <name>-api · <name>-db · <name>-docs
+#      and sets the app's hostname (APP_DOMAIN, default <name>.aipropfolio.com),
+#      where Pages serves the frontend and <hostname>/api/* routes to the Worker
 #   4. Initialises a git repo + first commit
 #   5. (Optional) Creates a GitHub repo and pushes — requires `gh` CLI
 # =============================================================================
@@ -91,6 +94,17 @@ DB_NAME="${APP_NAME}-db"
 BUCKET_NAME="${APP_NAME}-docs"
 PAGES_PROJECT="${APP_NAME}"
 
+# ── Hostname (frontend + /api on one domain, behind Cloudflare Access) ────────
+APP_DOMAIN="${APP_DOMAIN:-}"
+if [[ -z "$APP_DOMAIN" ]]; then
+  read -r -p "  App domain [${APP_NAME}.aipropfolio.com]: " APP_DOMAIN
+  APP_DOMAIN="${APP_DOMAIN:-${APP_NAME}.aipropfolio.com}"
+fi
+APP_DOMAIN="$(echo "$APP_DOMAIN" | sed -E 's#^https?://##; s#/.*$##')"
+# Zone = the domain registered in Cloudflare (last two labels by default;
+# set APP_ZONE for domains like example.com.sg)
+APP_ZONE="${APP_ZONE:-$(echo "$APP_DOMAIN" | awk -F. '{print $(NF-1)"."$NF}')}"
+
 # ── Preview ───────────────────────────────────────────────────────────────────
 header "Creating: ${APP_NAME}"
 echo ""
@@ -100,6 +114,8 @@ echo "  Worker        : ${WORKER_NAME}"
 echo "  D1 database   : ${DB_NAME}"
 echo "  R2 bucket     : ${BUCKET_NAME}"
 echo "  Pages project : ${PAGES_PROJECT}"
+echo "  App domain    : https://${APP_DOMAIN}  (API: ${APP_DOMAIN}/api/*)"
+echo "  Zone          : ${APP_ZONE}"
 echo ""
 
 if [[ -d "$OUTPUT_DIR" ]]; then
@@ -154,6 +170,8 @@ while IFS= read -r f; do
     -e "s|myapp-worker|${APP_NAME}-worker|g" \
     -e "s|myapp|${APP_NAME}|g" \
     -e "s|My App|${DISPLAY_NAME}|g" \
+    -e "s|REPLACE_WITH_APP_DOMAIN|${APP_DOMAIN}|g" \
+    -e "s|REPLACE_WITH_ZONE|${APP_ZONE}|g" \
     "$f"
 done < "$TEXT_FILES_LIST"
 
@@ -244,18 +262,25 @@ echo "  ${CYAN}3. Apply schema to remote D1${RESET}"
 echo "     cd worker"
 echo "     npx wrangler@3 d1 execute ${DB_NAME} --remote --file=src/db/schema.sql"
 echo ""
-echo "  ${CYAN}4. Set Worker secrets${RESET}"
-echo "     npx wrangler@3 secret put API_KEY"
-echo ""
-echo "  ${CYAN}5. Local dev${RESET}"
+echo "  ${CYAN}4. Local dev${RESET}"
+echo "     cp worker/.dev.vars.example worker/.dev.vars"
 echo "     Terminal 1:  cd worker   && npm install && npm run dev"
 echo "     Terminal 2:  cd frontend && npm install && npm run dev"
 echo ""
-echo "  ${CYAN}6. Add 4 GitHub Actions secrets${RESET}  (Settings → Secrets → Actions)"
-printf "     %-28s %s\n" "CLOUDFLARE_API_TOKEN"  "← Create at dash.cloudflare.com/profile/api-tokens"
+echo "  ${CYAN}5. Put the app on ${APP_DOMAIN}, behind a login${RESET}"
+echo "     a. Pages → ${PAGES_PROJECT} → Custom domains → add ${APP_DOMAIN}"
+echo "        (the Pages project is created by the first deploy)"
+echo "     b. Zero Trust → Access → Applications → Add → Self-hosted"
+echo "        Domain: ${APP_DOMAIN} (path blank) · Policy: Allow → your email"
+echo "     c. In worker/wrangler.toml.example set:"
+echo "        ACCESS_TEAM_DOMAIN = your team domain (Zero Trust → Settings → Custom Pages)"
+echo "        ACCESS_AUD         = the app's Application Audience (AUD) Tag"
+echo "     Until (c) is done, the API answers 503 to every request."
+echo ""
+echo "  ${CYAN}6. Add 3 GitHub Actions secrets${RESET}  (Settings → Secrets → Actions)"
+printf "     %-28s %s\n" "CLOUDFLARE_API_TOKEN"  "← Edit Cloudflare Workers template + D1/Pages edit"
 printf "     %-28s %s\n" "CLOUDFLARE_ACCOUNT_ID" "← Cloudflare Dashboard → right sidebar"
 printf "     %-28s %s\n" "D1_DATABASE_ID"        "← UUID from step 1"
-printf "     %-28s %s\n" "VITE_API_URL"          "← https://${WORKER_NAME}.YOUR_ACCOUNT.workers.dev"
 echo ""
 echo "  ${GREEN}${BOLD}After that, every push to main auto-deploys Worker + Pages. ✓${RESET}"
 echo ""

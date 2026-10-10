@@ -40,6 +40,23 @@ cd cf-fullstack-template
 | `myapp-docs` | `<name>-docs` (R2 bucket) |
 | `myapp` | `<name>` (package names, Pages project) |
 | `My App` | `<display-name>` (UI + HTML title) |
+| `REPLACE_WITH_APP_DOMAIN` | `APP_DOMAIN` (default `<name>.aipropfolio.com`) |
+| `REPLACE_WITH_ZONE` | the Cloudflare zone, e.g. `aipropfolio.com` |
+
+## Security model
+
+Every app runs on **one hostname behind Cloudflare Access**:
+
+- Pages serves the frontend on `APP_DOMAIN` (Pages → Custom domains).
+- The Worker answers `APP_DOMAIN/api/*` through a route; the frontend calls `/api` (same origin, no CORS).
+- A Cloudflare Access application on `APP_DOMAIN` puts a login in front of both.
+- `workers_dev = false` and `preview_urls = false`, so there's no second address that skips the login.
+- The Worker also checks the Access token itself (`worker/src/middleware/auth.ts`) and **fails closed**:
+  until `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are set in `wrangler.toml.example`, every `/api` request gets 503.
+  Local `wrangler dev` skips the check via `ENVIRONMENT=development` in `.dev.vars`.
+
+Earlier versions of this template put the API on `<name>-api.<account>.workers.dev` with an optional
+`API_KEY` that allowed every request when unset, so the API was public even when the page was behind Access.
 
 ## GitHub Actions secrets needed (after bootstrap)
 
@@ -48,7 +65,8 @@ cd cf-fullstack-template
 | `CLOUDFLARE_API_TOKEN` | API token with Worker + Pages + D1 + R2 permissions |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard → right sidebar |
 | `D1_DATABASE_ID` | UUID from `wrangler d1 create <name>-db` |
-| `VITE_API_URL` | `https://<name>-api.YOUR_ACCOUNT.workers.dev` |
+
+No `VITE_API_URL`: the frontend always calls `/api` on its own hostname.
 
 ## Template structure
 
@@ -58,13 +76,13 @@ cd cf-fullstack-template
 ├── .github/workflows/deploy.yml   # GitHub Actions CI/CD
 ├── worker/                        # Cloudflare Worker (Hono + TypeScript)
 │   ├── src/index.ts               # App entry + D1/R2/AI bindings
-│   ├── src/middleware/auth.ts     # Bearer token auth
+│   ├── src/middleware/auth.ts     # Cloudflare Access token check (fails closed)
 │   ├── src/db/schema.sql          # D1 schema + migrations tracker
 │   ├── src/routes/items.ts        # Example CRUD route
 │   └── wrangler.toml.example      # Config template (committed; real IDs gitignored)
 ├── frontend/                      # React 18 + Vite + Tailwind SPA
 │   └── src/
-│       ├── api/client.ts          # Fetch wrapper with auth
+│       ├── api/client.ts          # Fetch wrapper (same-origin /api)
 │       ├── components/            # Layout, Modal, StatCard
 │       ├── hooks/useSortFilter    # Sort + filter for tables
 │       └── pages/                 # Dashboard + Items example pages

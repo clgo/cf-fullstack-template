@@ -72,8 +72,10 @@
 
 ### Auth
 
-- **Default**: Bearer token (`API_KEY` secret) — single-user or internal apps
-- **Production multi-user**: Cloudflare Access (SSO at the network edge)
+- **Cloudflare Access** on the app's hostname protects the page and `/api/*` (same origin)
+- The Worker verifies the `Cf-Access-Jwt-Assertion` token itself and fails closed if
+  `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` aren't set (`src/middleware/auth.ts`)
+- `workers_dev = false`, `preview_urls = false`: no address that skips the login
 
 ---
 
@@ -113,8 +115,8 @@ Paid model option: OpenAI API via `OPENAI_API_KEY` secret.
 - Triggers: every push to `main` + manual `workflow_dispatch`
 - **Worker deploy**: `npm run deploy` (wrangler v3.114.17 pinned to avoid v4 CI issues)
   - `wrangler.toml` generated in CI from `wrangler.toml.example` + `D1_DATABASE_ID` secret
-- **Frontend deploy**: `npm run build` with `VITE_API_URL` injected → `wrangler pages deploy`
-- `VITE_API_URL` = base Worker URL (e.g. `https://myapp-api.xxx.workers.dev`); the client appends `/api`
+- **Frontend deploy**: `npm run build` → `wrangler pages deploy`
+- The frontend calls `/api` on its own hostname; `APP_DOMAIN/api/*` is a Worker route
 
 ---
 

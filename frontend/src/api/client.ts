@@ -1,31 +1,39 @@
 /**
  * Lightweight fetch wrapper around the Worker API.
  *
- * Base URL:
- *   - Local dev:   Vite proxies /api → http://localhost:8787/api (no VITE_API_URL needed)
- *   - Production:  VITE_API_URL is the base Worker URL (e.g. https://myapp-api.xxx.workers.dev)
- *                  This client appends /api automatically.
+ * The API is always called at /api on the app's own hostname:
+ *   - Local dev:   Vite proxies /api → http://localhost:8787/api
+ *   - Production:  APP_DOMAIN/api/* is routed to the Worker, behind the same
+ *                  Cloudflare Access login as the page (no API key, no CORS)
  *
- * Auth:
- *   - Reads API_KEY from localStorage (set during login or hardcoded for single-user apps)
- *   - Set to empty string if you've switched to Cloudflare Access (no client-side auth needed)
+ * When the Access session expires, Access answers API calls with a redirect to
+ * its login page; the client then reloads the page so the login can run.
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api`
-  : '/api';
-
-function getApiKey(): string {
-  return localStorage.getItem('api_key') ?? '';
-}
+const BASE_URL = '/api';
 
 function headers(extra: Record<string, string> = {}): Record<string, string> {
-  const apiKey = getApiKey();
-  return {
-    'Content-Type': 'application/json',
-    ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-    ...extra,
-  };
+  return { 'Content-Type': 'application/json', ...extra };
+}
+
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...init,
+    headers: headers(init.headers as Record<string, string> | undefined),
+    credentials: 'same-origin',
+    redirect: 'manual',
+  });
+  // Access session expired: reload so Cloudflare Access can sign you in again
+  // (at most once a minute, so a misconfiguration can't cause a reload loop)
+  if (res.type === 'opaqueredirect') {
+    const last = Number(sessionStorage.getItem('access_reload') ?? 0);
+    if (Date.now() - last > 60_000) {
+      sessionStorage.setItem('access_reload', String(Date.now()));
+      window.location.reload();
+    }
+    throw new Error('Session expired — please reload the page to sign in again');
+  }
+  return res;
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {
@@ -37,19 +45,10 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  /** Set the API key in localStorage (call after login). */
-  setApiKey(key: string) {
-    if (key) {
-      localStorage.setItem('api_key', key);
-    } else {
-      localStorage.removeItem('api_key');
-    }
-  },
-
-  /** Verify the API key is valid (pings the server). */
+  /** Check the API is reachable and the Access login is valid. */
   async ping(): Promise<boolean> {
     try {
-      const res = await fetch(`${BASE_URL}/ping`, { headers: headers() });
+      const res = await request('/ping');
       return res.ok;
     } catch {
       return false;
@@ -57,41 +56,37 @@ export const api = {
   },
 
   async get<T>(path: string): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, { headers: headers() });
+    const res = await request(path);
     return handleResponse<T>(res);
   },
 
   async post<T>(path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const res = await request(path, {
       method: 'POST',
-      headers: headers(),
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(res);
   },
 
   async put<T>(path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const res = await request(path, {
       method: 'PUT',
-      headers: headers(),
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(res);
   },
 
   async patch<T>(path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const res = await request(path, {
       method: 'PATCH',
-      headers: headers(),
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(res);
   },
 
   async delete<T>(path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const res = await request(path, {
       method: 'DELETE',
-      headers: headers(),
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(res);

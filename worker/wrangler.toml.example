@@ -10,6 +10,17 @@ compatibility_flags = ["nodejs_compat"]
 # Requires Cloudflare Workers Paid plan. Remove if you are on the free plan.
 usage_model = "unbound"
 
+# ── Hostname & access ────────────────────────────────────────────────────────
+# The app lives on one hostname: Pages serves the frontend (add the domain under
+# Pages → Custom domains) and this route sends /api/* to the Worker. A Cloudflare
+# Access application on the same hostname protects both.
+routes = [
+  { pattern = "REPLACE_WITH_APP_DOMAIN/api/*", zone_name = "REPLACE_WITH_ZONE" },
+]
+# No workers.dev or preview URLs: they would reach the API without the Access login
+workers_dev = false
+preview_urls = false
+
 # ── D1 Database ───────────────────────────────────────────────────────────────
 [[d1_databases]]
 binding = "DB"
@@ -43,9 +54,13 @@ crons = [
 # Secrets go in .dev.vars (local) or `wrangler secret put` (production)
 [vars]
 ENVIRONMENT = "production"
+# Cloudflare Access — the API refuses every request (503) until both are set.
+# Team domain: Zero Trust → Settings → Custom Pages (e.g. myteam.cloudflareaccess.com)
+ACCESS_TEAM_DOMAIN = "REPLACE_WITH_ACCESS_TEAM_DOMAIN"
+# Zero Trust → Access → Applications → <your app> → Overview → Application Audience (AUD) Tag
+ACCESS_AUD = "REPLACE_WITH_ACCESS_AUD"
 # Set to "false" to pause cron jobs without redeploying
 CRON_ENABLED = "true"
 
 # ── Secrets reference (set via `wrangler secret put <NAME>`) ─────────────────
-# API_KEY            — Bearer token protecting /api/* routes
 # OPENAI_API_KEY     — (optional) OpenAI key for paid AI features

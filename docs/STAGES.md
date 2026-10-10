@@ -11,10 +11,11 @@ After each commit, update the relevant item: mark `[x]`, add commit hash, note a
 - [ ] Replace `myapp` with real app name in all files
 - [ ] Create Cloudflare D1 database + R2 bucket
 - [ ] Apply `schema.sql` to remote D1
-- [ ] Set `API_KEY` secret via `wrangler secret put`
+- [ ] Add `APP_DOMAIN` as a Pages custom domain
+- [ ] Create the Cloudflare Access application for `APP_DOMAIN`; set `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` in `wrangler.toml.example`
 - [ ] Deploy Worker manually (`cd worker && npm run deploy`)
 - [ ] Deploy Frontend manually (`npm run build && wrangler pages deploy dist --project-name=myapp`)
-- [ ] Add GitHub Actions secrets (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID, VITE_API_URL)
+- [ ] Add GitHub Actions secrets (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID)
 - [ ] Verify auto-deploy on push to `main`
 - **Last commit:** `(TBD)`
 - **Branch:** `main`

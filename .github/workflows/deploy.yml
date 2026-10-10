@@ -14,6 +14,8 @@ jobs:
   deploy-worker:
     name: Deploy Worker
     runs-on: ubuntu-latest
+    # Don't deploy the template repo itself (it has placeholders, no secrets)
+    if: github.repository != 'clgo/cf-fullstack-template'
 
     steps:
       - uses: actions/checkout@v4
@@ -66,10 +68,7 @@ jobs:
       - name: Build Frontend
         run: npm run build
         working-directory: frontend
-        env:
-          # Base Worker URL — the /api prefix is appended by client.ts
-          # e.g. https://myapp-api.YOUR_ACCOUNT.workers.dev
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        # No API URL needed: the frontend calls /api on its own hostname
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
