@@ -29,7 +29,8 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 type SortDir = 'asc' | 'desc';
 
-export function useSortFilter<T extends Record<string, unknown>>(
+// T is any row object (an interface works; no index signature needed)
+export function useSortFilter<T extends object>(
   data: T[],
   searchFields: (keyof T)[]
 ) {
@@ -54,7 +55,7 @@ export function useSortFilter<T extends Record<string, unknown>>(
       const q = filter.toLowerCase();
       result = result.filter((row) =>
         searchFields.some((field) => {
-          const val = row[field];
+          const val: unknown = row[field];
           return typeof val === 'string' && val.toLowerCase().includes(q);
         })
       );
@@ -63,8 +64,8 @@ export function useSortFilter<T extends Record<string, unknown>>(
     // Sort
     if (sortKey) {
       result.sort((a, b) => {
-        const av = a[sortKey];
-        const bv = b[sortKey];
+        const av = a[sortKey] as unknown as string | number | null | undefined;
+        const bv = b[sortKey] as unknown as string | number | null | undefined;
         if (av === null || av === undefined) return 1;
         if (bv === null || bv === undefined) return -1;
         const cmp = av < bv ? -1 : av > bv ? 1 : 0;
@@ -80,23 +81,23 @@ export function useSortFilter<T extends Record<string, unknown>>(
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-interface SortThProps<T> {
-  col: keyof T;
-  sortKey: keyof T | null;
+interface SortThProps<K extends PropertyKey> {
+  col: K;
+  sortKey: K | null;
   sortDir: SortDir;
-  onToggle: (col: keyof T) => void;
+  onToggle: (col: K) => void;
   children: ReactNode;
   className?: string;
 }
 
-export function SortTh<T>({
+export function SortTh<K extends PropertyKey>({
   col,
   sortKey,
   sortDir,
   onToggle,
   children,
   className = '',
-}: SortThProps<T>) {
+}: SortThProps<K>) {
   const isActive = sortKey === col;
 
   return (

@@ -136,7 +136,7 @@ worker/
   src/
     index.ts           # Hono app entry + cron handlers
     middleware/
-      auth.ts          # Bearer token auth
+      auth.ts          # Cloudflare Access token check (fails closed)
     db/
       schema.sql       # D1 schema (source of truth)
     routes/

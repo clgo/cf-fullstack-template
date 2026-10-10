@@ -69,3 +69,7 @@ cd worker && npx wrangler@3 d1 execute myapp-db --remote \
 - Use `lucide-react` for all icons — no Unicode symbols or ASCII art in UI.
 - All interactive elements must have `transition-colors duration-150` or `transition-shadow duration-200`.
 - Every new table in the UI **must** use `useSortFilter` + `SortTh` + `FilterInput`.
+- **Security:** the API lives only at `APP_DOMAIN/api/*`, behind Cloudflare Access. Never set
+  `workers_dev` or `preview_urls` to true, never add CORS or a second route/domain for the Worker, and
+  keep `api.use('*', accessAuth)` ahead of every `/api` route. The frontend calls `/api` (same origin).
+- Don't set `ENVIRONMENT=development` anywhere except `worker/.dev.vars`: it turns off the Access check.

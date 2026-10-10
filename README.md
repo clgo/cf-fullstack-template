@@ -31,6 +31,9 @@ cd cf-fullstack-template
 ./create-app.sh my-budget-app "My Budget App"
 ```
 
+The script asks for the app's domain (default `<name>.aipropfolio.com`; or set `APP_DOMAIN=...`),
+then prints the remaining setup steps, including the Cloudflare Access login.
+
 ## What gets replaced
 
 | Placeholder | Becomes |
@@ -74,13 +77,13 @@ No `VITE_API_URL`: the frontend always calls `/api` on its own hostname.
 .
 ├── create-app.sh                  # Bootstrap script (not copied to new projects)
 ├── .github/workflows/deploy.yml   # GitHub Actions CI/CD
-├── worker/                        # Cloudflare Worker (Hono + TypeScript)
+├── worker/                        # Cloudflare Worker (Hono + TypeScript), with package-lock.json
 │   ├── src/index.ts               # App entry + D1/R2/AI bindings
 │   ├── src/middleware/auth.ts     # Cloudflare Access token check (fails closed)
 │   ├── src/db/schema.sql          # D1 schema + migrations tracker
 │   ├── src/routes/items.ts        # Example CRUD route
 │   └── wrangler.toml.example      # Config template (committed; real IDs gitignored)
-├── frontend/                      # React 18 + Vite + Tailwind SPA
+├── frontend/                      # React 18 + Vite + Tailwind SPA, with package-lock.json
 │   └── src/
 │       ├── api/client.ts          # Fetch wrapper (same-origin /api)
 │       ├── components/            # Layout, Modal, StatCard
@@ -93,6 +96,39 @@ No `VITE_API_URL`: the frontend always calls `/api` on its own hostname.
     ├── PROJECT_SPECS.md           # Feature requirements
     └── TECH_STACK.md              # Architecture + design tokens
 ```
+
+## Template changelog
+
+### 2026-10-10
+
+**Security fix: the API was reachable without the login.** Apps put the API on
+`<name>-api.<account>.workers.dev`, and `API_KEY` auth allowed every request when the key wasn't set,
+so the API was public even when the page was behind Cloudflare Access (this affected proptracker).
+
+- The Worker answers `APP_DOMAIN/api/*` through a route; `workers_dev = false`, `preview_urls = false`.
+- The frontend always calls `/api` on its own hostname. `VITE_API_URL` is gone (one fewer GitHub secret).
+- CORS removed: other sites can't call the API from a browser.
+- `worker/src/middleware/auth.ts` verifies the Cloudflare Access token (`Cf-Access-Jwt-Assertion`)
+  and fails closed (503) until `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are set. Replaces `API_KEY` auth.
+- `client.ts` reloads the page when the Access session expires, so the login can run again.
+- `create-app.sh` asks for the app domain and prints the Pages custom-domain and Access setup steps.
+- The template repo's own pushes no longer try to deploy.
+
+**Build fixes: a new app's first CI deploy failed.**
+
+- `worker/` and `frontend/` had no `package-lock.json`, so `npm ci` failed. Both are now committed.
+- `npm run build` (`tsc -b`) failed with 15 TypeScript errors:
+  - `useSortFilter` required `Record<string, unknown>` rows, which interfaces like `Item` don't satisfy;
+    it now accepts any object, and `SortTh` is typed by the column key.
+  - Added `src/vite-env.d.ts` so CSS imports and `import.meta.env` have types.
+  - `tsconfig.node.json` now sets `skipLibCheck` (Vite's and Rollup's own type files failed to check).
+
+### Upgrading an app made from an older template
+
+Copy `worker/src/middleware/auth.ts`, `frontend/src/api/client.ts` and the `routes` / `workers_dev` /
+`preview_urls` / `ACCESS_*` lines of `worker/wrangler.toml.example`, switch `index.ts` to `accessAuth`,
+and remove `VITE_API_URL` from the workflow. Deploy the route first, then the frontend, then turn
+`workers_dev` off, so the app keeps working throughout.
 
 ---
 
